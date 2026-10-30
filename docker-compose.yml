@@ -1,0 +1,69 @@
+services:
+  # Stockage objet (compatible S3) : le socle du datalake
+  rustfs:
+    image: rustfs/rustfs:1.0.4
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+    ports:
+      - "9000:9000" # API S3
+      - "9001:9001" # Interface web
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Crée le bucket du datalake au démarrage, puis s'arrête
+  s3-init:
+    image: amazon/aws-cli:2.27.0
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-rustfsadmin}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-rustfsadmin}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://rustfs:9000
+    entrypoint: >
+      /bin/sh -c "
+      aws s3api head-bucket --bucket datalake ||
+      aws s3api create-bucket --bucket datalake
+      "
+
+  # Orchestrateur : un seul conteneur en mode standalone
+  airflow:
+    image: apache/airflow:2.10.5-python3.11
+    command: >
+      bash -c "
+      rm -f /opt/airflow/airflow-webserver*.pid &&
+      airflow db migrate &&
+      airflow users create --username $$AIRFLOW_ADMIN_USER --password $$AIRFLOW_ADMIN_PASSWORD
+      --firstname Admin --lastname User --role Admin --email admin@example.com &&
+      airflow standalone
+      "
+    depends_on:
+      s3-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER:-admin}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  rustfs_data:
