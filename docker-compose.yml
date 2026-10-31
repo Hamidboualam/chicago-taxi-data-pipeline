@@ -38,7 +38,7 @@ services:
 
   # Orchestrateur : un seul conteneur en mode standalone
   airflow:
-    image: apache/airflow:2.10.5-python3.11
+    build: .
     command: >
       bash -c "
       rm -f /opt/airflow/airflow-webserver*.pid &&
@@ -54,10 +54,14 @@ services:
       AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER:-admin}
       AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      S3_ENDPOINT: http://rustfs:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
     ports:
       - "8080:8080"
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
       interval: 10s
