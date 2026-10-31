@@ -57,17 +57,34 @@ services:
       S3_ENDPOINT: http://rustfs:9000
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
+      PYTHONPATH: /opt/airflow/src
     ports:
       - "8080:8080"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./sql:/opt/airflow/sql
+      - ./tests:/opt/airflow/tests
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 20
       start_period: 30s
+
+  # Dashboard : affiche les tables gold
+  dashboard:
+    build: ./dashboard
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      S3_ENDPOINT: http://rustfs:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
+    ports:
+      - "8501:8501"
 
 volumes:
   rustfs_data:

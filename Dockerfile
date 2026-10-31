@@ -7,7 +7,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 USER airflow
-RUN pip install --no-cache-dir pyspark==3.5.6
+RUN pip install --no-cache-dir pyspark==3.5.6 duckdb==1.3.2 pytest==8.3.5
+
+# Extension DuckDB pour lire les fichiers sur S3
+RUN python -c "import duckdb; duckdb.sql('INSTALL httpfs')"
 
 # Connecteur S3 : permet à Spark de lire et écrire dans RustFS
 # (hadoop-aws doit avoir la même version que le Hadoop inclus dans PySpark)
